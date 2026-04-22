@@ -1,108 +1,147 @@
 # 📦 Repo-Vector-Base
 
-A powerful CLI tool that generates **comprehensive Markdown reports** for any public GitHub repository. Just give it a repo name — it pulls everything from the GitHub API and saves a beautifully formatted `.md` file.
+> Transform any GitHub repo into a knowledge base — save it as a detailed Markdown report, dependency graph, and LLM-ready context doc.
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Install dependencies
+# 1. Clone the repo
+git clone https://github.com/Nyvora-Vision-Labs/Repo-Vector-Base.git
+cd Repo-Vector-Base
+
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 2. Run it
+# 3. Set up your API keys (optional but recommended)
+cp .env.example .env
+# Edit .env with your keys:
+#   GITHUB_TOKEN=ghp_xxxx        (for higher rate limits)
+#   GEMINI_API_KEY=AIzaSy...     (for AI summaries)
+
+# 4. Generate a report
 python repo_report.py facebook/react
 ```
 
-Your report will be saved to `./reports/facebook_react_report.md`.
+Your report will be saved to `./reports/facebook_react_report.md` 🎉
 
 ---
 
 ## 📖 Usage
 
-```
-python repo_report.py <owner/repo or GitHub URL> [--token TOKEN] [--output DIR] [--json]
-```
-
-| Argument     | Description                                      | Default           |
-|------------- |------------------------------------------------- |------------------ |
-| `repo`       | `owner/repo` or full GitHub URL                  | _(required)_      |
-| `--token`    | GitHub PAT for higher rate limits / private repos | `$GITHUB_TOKEN`   |
-| `--output`   | Directory to save the report                     | `./reports`       |
-| `--json`     | Also export raw API data as JSON                 | `false`           |
-
-### Examples
-
 ```bash
-# Simple
+python repo_report.py <owner/repo or GitHub URL> [options]
+```
+
+### Options
+
+| Flag             | Description                                           | Default         |
+|----------------- |------------------------------------------------------ |---------------- |
+| `--token`, `-t`  | GitHub personal access token                          | `$GITHUB_TOKEN` |
+| `--output`, `-o` | Output directory for reports                          | `./reports`     |
+| `--json`, `-j`   | Also export raw API data as JSON                      | off             |
+| `--graph`, `-g`  | Generate knowledge graph + LLM context document       | off             |
+| `--max-files`    | Max source files to fetch for graph (default: 250)    | 250             |
+| `--gemini-key`   | Gemini API key for AI-powered summary                 | `$GEMINI_API_KEY` |
+| `--no-ai`        | Skip AI summary generation                            | off             |
+
+---
+
+## 💡 Sample Usage
+
+### Basic report
+```bash
 python repo_report.py torvalds/linux
+```
 
-# Full URL
-python repo_report.py https://github.com/pallets/flask
+### Full URL with auth token
+```bash
+python repo_report.py https://github.com/pallets/flask --token ghp_xxxx
+```
 
-# With auth token (5000 req/hr instead of 60)
-python repo_report.py myorg/private-repo --token ghp_xxxxxxxxxxxx
+### Everything enabled (report + JSON + graph + AI summary)
+```bash
+python repo_report.py vercel/next.js \
+  --token ghp_xxxx \
+  --json \
+  --graph \
+  --output ./my-reports
+```
 
-# With JSON export
-python repo_report.py vercel/next.js --output ~/Desktop/reports --json
+### Graph only, skip AI summary
+```bash
+python repo_report.py facebook/react --graph --no-ai --token $(gh auth token)
+```
+
+### Using environment variables (no flags needed)
+```bash
+export GITHUB_TOKEN=ghp_xxxx
+export GEMINI_API_KEY=AIzaSy...
+python repo_report.py django/django --graph --json
+```
+
+### Output files generated
+```
+./reports/
+├── django_django_report.md      # Full markdown report with all sections
+├── django_django_data.json      # Raw API data (with --json)
+├── django_django_graph.json     # Dependency graph as JSON (with --graph)
+└── django_django_context.txt    # LLM-ready context document (with --graph)
 ```
 
 ---
 
-## ✨ Features (v2)
+## 📊 What's in the Report?
 
-### Core Report Sections
-| Section                     | Details                                              |
-|---------------------------- |----------------------------------------------------- |
-| 🏆 Health Score + TL;DR     | Auto-calculated 0–100 score across 6 dimensions      |
-| 📋 Overview                | Description, URL, visibility, creation date, etc.    |
-| ⭐ Statistics               | Stars, forks, watchers, open issues, repo size       |
-| 🏷️ Topics                  | All repository topics                                |
-| 💻 Languages               | Byte-count breakdown with percentage bars            |
-| 📜 License                 | License name and SPDX identifier                     |
-| 👤 Owner                   | Username, type, avatar                               |
-| 👥 Top Contributors        | Top 20 contributors with commit counts               |
-| 📈 Commit Activity         | Weekly commit heatmap (last 12 weeks)                |
-| 📉 Code Frequency          | Lines added/removed over time                        |
-| ⏱️ Issue/PR Velocity       | Avg/median close times, merge rates                  |
-| 🌿 Branches                | All branches with protection status                  |
-| 🏷️ Tags                    | Recent tags                                          |
-| 🚀 Releases                | Last 10 releases with assets & release notes         |
-| 📝 Recent Commits          | Last 15 commits with SHA, message, author            |
-| 🐛 Open Issues             | Recent open issues with labels                       |
-| 🔀 Open Pull Requests      | Recent open PRs with labels                          |
-| ⚙️ GitHub Actions          | CI/CD workflow names, states, paths                  |
-| 🤝 Community Profile       | Health score, CODE_OF_CONDUCT, CONTRIBUTING, etc.    |
-| 📦 Dependencies            | Auto-detected build systems & dependency files       |
-| 🌐 Deployments             | Recent deployment environments                       |
-| 📊 Traffic                 | Views & clones (requires push access + token)        |
-| 📂 Directory Structure     | Full file tree of the repository                     |
-| 📖 README Preview          | First 3000 characters of the README                  |
+### Core Sections
+| Section                       | Details                                              |
+|------------------------------ |----------------------------------------------------- |
+| 🏆 Health Score + TL;DR       | 0–100 score across 6 dimensions + AI summary         |
+| 🤖 AI Executive Summary      | Gemini-powered analysis of strengths & weaknesses    |
+| 📋 Overview                  | Description, URL, visibility, dates                  |
+| ⭐ Statistics                 | Stars, forks, watchers, issues, repo size            |
+| 🏷️ Topics                    | Repository topics                                    |
+| 💻 Languages                 | Byte-count breakdown with visual bars                |
+| 📜 License                   | License name + SPDX ID                               |
+| 👤 Owner                     | Username, type, avatar                               |
+| 👥 Top Contributors          | Top 20 contributors with commit counts               |
+| 📈 Commit Activity           | Weekly commit heatmap (last 12 weeks)                |
+| 📉 Code Frequency            | Lines added/removed over time                        |
+| ⏱️ Issue/PR Velocity         | Avg/median close times, PR merge rate                |
+| 🌿 Branches                  | All branches with protection status                  |
+| 🏷️ Tags / 🚀 Releases       | Tags + releases with assets & notes                  |
+| 📝 Recent Commits            | Last 15 commits with SHA, message, author            |
+| 🐛 Issues / 🔀 PRs           | Open issues and pull requests                        |
+| ⚙️ GitHub Actions            | CI/CD workflows with states                          |
+| 🤝 Community Profile         | Health checklist (CoC, Contributing, etc.)            |
+| 📦 Dependencies              | Auto-detected build systems & dep files              |
+| 🌐 Deployments / 📊 Traffic  | Recent deploys + view/clone stats                    |
+| 📂 Directory Tree             | Full file tree of the repository                     |
+| 📖 README Preview            | First 3000 chars of the README                       |
 
-### Engine Features
-| Feature                      | Details                                              |
-|----------------------------- |----------------------------------------------------- |
-| ⚡ Parallel Fetching         | 10-thread concurrent API calls (~5x faster)          |
-| 🔄 Retry + Backoff          | Automatic retry with exponential backoff for rate limits |
-| 💾 JSON Export               | `--json` flag exports raw API data alongside report  |
-| 🏆 Health Score              | Scored across Documentation, Activity, Community, CI/CD, Maintenance, Code Quality |
+### Graph Outputs (with `--graph`)
+| Output                        | Details                                              |
+|------------------------------ |----------------------------------------------------- |
+| 🕸️ Mermaid Diagram           | Visual dependency graph in the report                |
+| 🗂️ JSON Graph                | `{nodes, edges, stats}` — machine-readable           |
+| 📝 LLM Context Document      | Architecture overview, definitions, dependency map   |
 
 ---
 
 ## 🔑 Authentication
 
-Without a token you get **60 requests/hour** (may not be enough for large repos). With a token you get **5,000 requests/hour** and access to private repos.
+| Method                         | Rate Limit   |
+|------------------------------- |------------- |
+| No token                      | 60 req/hr    |
+| With `--token` or `$GITHUB_TOKEN` | 5,000 req/hr |
 
 ```bash
-# Option 1: pass directly
-python repo_report.py owner/repo --token ghp_xxxx
-
-# Option 2: environment variable
-export GITHUB_TOKEN=ghp_xxxx
-python repo_report.py owner/repo
-
-# Option 3: use gh CLI token
+# Use gh CLI
 python repo_report.py owner/repo --token $(gh auth token)
+
+# Or set env var
+export GITHUB_TOKEN=ghp_xxxx
 ```
 
 ---
@@ -111,14 +150,13 @@ python repo_report.py owner/repo --token $(gh auth token)
 
 ```
 Repo-Vector-Base/
-├── repo_report.py       # Main CLI tool & markdown builder
-├── features.py          # 8 feature modules (parallel, retry, analysis, etc.)
+├── repo_report.py       # Main CLI — fetches data & builds markdown
+├── features.py          # Analysis features (parallel, retry, velocity, health, AI)
+├── graph.py             # Knowledge graph (import parsing, Mermaid, LLM context)
 ├── requirements.txt     # Python dependencies
-├── readme.md            # This file
-├── .gitignore           # Ignores reports/ and Python cache
-└── reports/             # Generated reports (git-ignored)
-    ├── *_report.md      # Markdown reports
-    └── *_data.json      # Raw JSON data (with --json flag)
+├── .env.example         # Template for API keys
+├── .gitignore           # Ignores reports/, .env, __pycache__/
+└── readme.md            # This file
 ```
 
 ---

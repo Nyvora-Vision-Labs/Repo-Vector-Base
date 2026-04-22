@@ -45,6 +45,13 @@ from features import (
     export_json,
     append_ai_summary_to_report,
 )
+from graph import (
+    fetch_file_contents,
+    build_graph,
+    build_mermaid_diagram,
+    export_graph_json,
+    export_llm_context,
+)
 
 # ──────────────────────────────────────────────
 # Constants
@@ -455,6 +462,10 @@ def main():
                         help="Gemini API key for AI summary (or set GEMINI_API_KEY in .env)")
     parser.add_argument("--no-ai", action="store_true",
                         help="Skip AI-powered summary generation")
+    parser.add_argument("--graph", "-g", action="store_true",
+                        help="Generate repository knowledge graph (Mermaid + JSON + LLM context)")
+    parser.add_argument("--max-files", type=int, default=250,
+                        help="Max source files to fetch for graph analysis (default: 250)")
     args = parser.parse_args()
 
     owner, repo = parse_repo_input(args.repo)
@@ -488,6 +499,33 @@ def main():
     if args.json:
         json_path = export_json(data, args.output, owner, repo)
         print(f"✅  JSON data saved to: {json_path}")
+
+    # Feature 10: Knowledge Graph
+    if args.graph:
+        print("\n🕸️  Building repository knowledge graph…")
+        tree = data.get("tree", [])
+        file_contents = fetch_file_contents(session, owner, repo, tree, max_files=args.max_files)
+        repo_graph = build_graph(file_contents, tree)
+
+        # Mermaid diagram → append to report
+        mermaid = build_mermaid_diagram(repo_graph)
+        if mermaid:
+            with open(filepath, "a", encoding="utf-8") as f:
+                f.write("\n" + mermaid)
+            print("✅  Mermaid dependency graph added to report")
+
+        # JSON graph
+        graph_json_path = export_graph_json(repo_graph, args.output, owner, repo)
+        print(f"✅  Graph JSON saved to: {graph_json_path}")
+
+        # LLM context doc
+        ctx_path = export_llm_context(repo_graph, args.output, owner, repo, data)
+        print(f"✅  LLM context doc saved to: {ctx_path}")
+
+        # Stats
+        import_edges = [e for e in repo_graph["edges"] if e["type"] == "imports"]
+        file_nodes = [n for n in repo_graph["nodes"].values() if n["type"] == "file"]
+        print(f"    ({len(file_nodes)} files, {len(import_edges)} import edges)")
 
     # Print health score summary
     from features import calculate_health_score
