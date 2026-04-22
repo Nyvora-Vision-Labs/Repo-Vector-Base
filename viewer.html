@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repo-Vector-Base — 3D Graph Viewer</title>
+<script src="https://unpkg.com/3d-force-graph@1"></script>
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.160.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#0a0a1a;color:#e0e0f0;overflow:hidden;height:100vh}
+#graph-container{width:100%;height:100vh}
+
+/* Top bar */
+.top-bar{position:fixed;top:0;left:0;right:0;height:56px;background:rgba(10,10,26,0.85);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;padding:0 20px;z-index:100;gap:16px}
+.top-bar h1{font-size:16px;font-weight:600;background:linear-gradient(135deg,#6366f1,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+.top-bar .sep{width:1px;height:24px;background:rgba(255,255,255,0.1)}
+.search-box{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 14px;color:#e0e0f0;font-size:13px;width:220px;outline:none;transition:border-color .2s}
+.search-box:focus{border-color:#6366f1}
+.filter-btn{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 14px;color:#a0a0c0;font-size:12px;cursor:pointer;transition:all .2s}
+.filter-btn:hover,.filter-btn.active{background:rgba(99,102,241,0.2);border-color:#6366f1;color:#c4b5fd}
+.load-btn{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;border-radius:8px;padding:8px 18px;color:#fff;font-size:13px;font-weight:500;cursor:pointer;transition:transform .15s}
+.load-btn:hover{transform:scale(1.05)}
+.stats-text{font-size:12px;color:#808098;margin-left:auto;white-space:nowrap}
+
+/* Side panel */
+.side-panel{position:fixed;top:56px;right:0;width:340px;height:calc(100vh - 56px);background:rgba(10,10,26,0.92);backdrop-filter:blur(20px);border-left:1px solid rgba(255,255,255,0.06);padding:20px;overflow-y:auto;transform:translateX(100%);transition:transform .3s ease;z-index:99}
+.side-panel.open{transform:translateX(0)}
+.side-panel h2{font-size:14px;font-weight:600;color:#c4b5fd;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
+.side-panel h3{font-size:15px;font-weight:600;color:#e0e0f0;margin:8px 0;word-break:break-all}
+.side-panel .tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;margin:2px}
+.side-panel .detail-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px}
+.side-panel .detail-row .label{color:#808098}
+.side-panel .detail-row .value{color:#e0e0f0;font-weight:500}
+.side-panel .def-list{list-style:none;padding:0;margin:8px 0}
+.side-panel .def-list li{padding:4px 0;font-size:13px;color:#a0a0c0}
+.side-panel .def-list li::before{content:'→ ';color:#6366f1}
+.close-panel{position:absolute;top:12px;right:12px;background:none;border:none;color:#808098;font-size:18px;cursor:pointer}
+
+/* Drop zone */
+.drop-overlay{position:fixed;inset:0;background:rgba(10,10,26,0.95);display:none;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:16px}
+.drop-overlay.show{display:flex}
+.drop-overlay .drop-box{width:400px;height:200px;border:2px dashed #6366f1;border-radius:16px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#c4b5fd;font-size:15px}
+.drop-overlay .drop-box .icon{font-size:48px}
+
+/* Legend */
+.legend{position:fixed;bottom:16px;left:16px;background:rgba(10,10,26,0.85);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;z-index:50;font-size:11px}
+.legend-item{display:flex;align-items:center;gap:8px;padding:2px 0;color:#a0a0c0}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+
+/* Tooltip */
+.node-tooltip{position:fixed;background:rgba(15,15,35,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;font-size:12px;color:#e0e0f0;pointer-events:none;z-index:150;display:none;max-width:300px}
+
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>🕸️ Repo-Vector-Base</h1>
+  <div class="sep"></div>
+  <input class="search-box" id="searchInput" placeholder="Search files…" />
+  <div class="sep"></div>
+  <div id="filterContainer"></div>
+  <div class="sep"></div>
+  <button class="load-btn" onclick="document.getElementById('fileInput').click()">📂 Load Graph</button>
+  <input type="file" id="fileInput" accept=".json" />
+  <span class="stats-text" id="statsText">Drop a _graph.json file or click Load</span>
+</div>
+
+<div id="graph-container"></div>
+
+<div class="side-panel" id="sidePanel">
+  <button class="close-panel" onclick="closeSidePanel()">✕</button>
+  <div id="panelContent"></div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-box">
+    <div class="icon">📂</div>
+    <div>Drop your <strong>_graph.json</strong> file here</div>
+  </div>
+  <button class="load-btn" onclick="hideDropOverlay()">Cancel</button>
+</div>
+
+<div class="legend" id="legend"></div>
+<div class="node-tooltip" id="tooltip"></div>
+
+<script>
+// ── Color palette by extension ──
+const EXT_COLORS = {
+  '.py': '#3572A5', '.js': '#f1e05a', '.ts': '#3178c6', '.tsx': '#3178c6',
+  '.jsx': '#f1e05a', '.go': '#00ADD8', '.rs': '#dea584', '.java': '#b07219',
+  '.rb': '#CC342D', '.c': '#555555', '.cpp': '#f34b7d', '.h': '#555555',
+  '.swift': '#F05138', '.css': '#563d7c', '.html': '#e34c26',
+  '.json': '#40a070', '.yml': '#cb171e', '.yaml': '#cb171e',
+  '.md': '#083fa1', '.toml': '#9c4221', '.xml': '#0060ac',
+  '.sh': '#89e051', '.dockerfile': '#384d54',
+  'directory': '#6366f1', 'default': '#808098',
+};
+
+const DIR_COLOR = '#6366f1';
+const ENTRY_COLOR = '#f59e0b';
+const IMPORT_EDGE_COLOR = 'rgba(139, 92, 246, 0.35)';
+const CONTAINS_EDGE_COLOR = 'rgba(255,255,255,0.04)';
+
+let graphData = null;
+let graphInstance = null;
+let allNodes = [];
+let allLinks = [];
+let activeFilters = new Set();
+let highlightNodes = new Set();
+let highlightLinks = new Set();
+let selectedNode = null;
+
+// ── Initialize 3D graph ──
+function initGraph(data) {
+  graphData = data;
+  const container = document.getElementById('graph-container');
+  container.innerHTML = '';
+
+  // Build nodes & links
+  const nodeMap = {};
+  allNodes = [];
+  allLinks = [];
+
+  // Only include file nodes and dirs that contain files
+  const importEdges = data.edges.filter(e => e.type === 'imports');
+  const importNodes = new Set();
+  importEdges.forEach(e => { importNodes.add(e.from); importNodes.add(e.to); });
+
+  // If few import edges, show all files
+  const showAll = importEdges.length < 5;
+
+  data.nodes.forEach(n => {
+    if (n.type === 'directory') {
+      if (showAll) {
+        const node = { ...n, color: DIR_COLOR, val: 2 };
+        allNodes.push(node);
+        nodeMap[n.id] = node;
+      }
+      return;
+    }
+    // File node
+    const ext = n.extension || '';
+    const color = n.is_entry_point ? ENTRY_COLOR : (EXT_COLORS[ext] || EXT_COLORS['default']);
+    const val = n.is_entry_point ? 5 : (importNodes.has(n.id) ? 3 : 1.5);
+    const node = { ...n, color, val };
+    allNodes.push(node);
+    nodeMap[n.id] = node;
+  });
+
+  data.edges.forEach(e => {
+    if (nodeMap[e.from] && nodeMap[e.to]) {
+      allLinks.push({
+        source: e.from, target: e.to, type: e.type,
+        color: e.type === 'imports' ? IMPORT_EDGE_COLOR : CONTAINS_EDGE_COLOR,
+      });
+    }
+  });
+
+  // Create graph
+  graphInstance = ForceGraph3D()(container)
+    .graphData({ nodes: allNodes, links: allLinks })
+    .nodeId('id')
+    .nodeLabel(n => '')
+    .nodeColor(n => {
+      if (highlightNodes.size && !highlightNodes.has(n)) return 'rgba(60,60,80,0.3)';
+      return n.color;
+    })
+    .nodeVal(n => n.val)
+    .nodeOpacity(0.9)
+    .nodeResolution(16)
+    .linkColor(l => {
+      if (highlightLinks.size && !highlightLinks.has(l)) return 'rgba(255,255,255,0.01)';
+      return l.type === 'imports' ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.04)';
+    })
+    .linkWidth(l => l.type === 'imports' ? 1.2 : 0.3)
+    .linkOpacity(0.6)
+    .linkDirectionalArrowLength(l => l.type === 'imports' ? 4 : 0)
+    .linkDirectionalArrowRelPos(1)
+    .linkDirectionalParticles(l => l.type === 'imports' ? 2 : 0)
+    .linkDirectionalParticleWidth(1.5)
+    .linkDirectionalParticleSpeed(0.005)
+    .linkDirectionalParticleColor(() => '#a78bfa')
+    .backgroundColor('#0a0a1a')
+    .onNodeClick(handleNodeClick)
+    .onNodeHover(handleNodeHover)
+    .d3Force('charge').strength(-120);
+
+  graphInstance.d3Force('link').distance(l => l.type === 'imports' ? 80 : 40);
+
+  // Update stats
+  const fileCount = allNodes.filter(n => n.type === 'file').length;
+  const edgeCount = allLinks.filter(l => l.type === 'imports').length;
+  document.getElementById('statsText').textContent = 
+    `${data.repository || 'Repo'} — ${fileCount} files, ${edgeCount} dependencies`;
+
+  // Build filters
+  buildFilters();
+  buildLegend();
+}
+
+// ── Filters ──
+function buildFilters() {
+  const exts = new Set();
+  allNodes.forEach(n => { if (n.extension) exts.add(n.extension); });
+  const container = document.getElementById('filterContainer');
+  container.innerHTML = '';
+  [...exts].sort().forEach(ext => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.textContent = ext;
+    btn.onclick = () => toggleFilter(ext, btn);
+    container.appendChild(btn);
+  });
+}
+
+function toggleFilter(ext, btn) {
+  if (activeFilters.has(ext)) {
+    activeFilters.delete(ext);
+    btn.classList.remove('active');
+  } else {
+    activeFilters.add(ext);
+    btn.classList.add('active');
+  }
+  applyFilters();
+}
+
+function applyFilters() {
+  if (!graphInstance) return;
+  const filtered = activeFilters.size === 0 ? allNodes :
+    allNodes.filter(n => n.type === 'directory' || activeFilters.has(n.extension));
+  const nodeIds = new Set(filtered.map(n => n.id));
+  const filteredLinks = allLinks.filter(l => {
+    const src = typeof l.source === 'object' ? l.source.id : l.source;
+    const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+    return nodeIds.has(src) && nodeIds.has(tgt);
+  });
+  graphInstance.graphData({ nodes: filtered, links: filteredLinks });
+}
+
+// ── Search ──
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  highlightNodes.clear();
+  highlightLinks.clear();
+  if (q) {
+    allNodes.forEach(n => {
+      if (n.id.toLowerCase().includes(q) || (n.name || '').toLowerCase().includes(q)) {
+        highlightNodes.add(n);
+      }
+    });
+  }
+  graphInstance && graphInstance.nodeColor(graphInstance.nodeColor());
+  graphInstance && graphInstance.linkColor(graphInstance.linkColor());
+});
+
+// ── Node interactions ──
+function handleNodeHover(node) {
+  const tooltip = document.getElementById('tooltip');
+  if (node) {
+    tooltip.style.display = 'block';
+    tooltip.innerHTML = `<strong>${node.name}</strong><br><span style="color:#808098">${node.id}</span>`;
+    document.addEventListener('mousemove', moveTooltip);
+  } else {
+    tooltip.style.display = 'none';
+    document.removeEventListener('mousemove', moveTooltip);
+  }
+  document.body.style.cursor = node ? 'pointer' : 'default';
+}
+
+function moveTooltip(e) {
+  const t = document.getElementById('tooltip');
+  t.style.left = (e.clientX + 14) + 'px';
+  t.style.top = (e.clientY + 14) + 'px';
+}
+
+function handleNodeClick(node) {
+  if (!node) return;
+  selectedNode = node;
+
+  // Highlight connected nodes
+  highlightNodes.clear();
+  highlightLinks.clear();
+  highlightNodes.add(node);
+  allLinks.forEach(l => {
+    const src = typeof l.source === 'object' ? l.source.id : l.source;
+    const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+    if (src === node.id || tgt === node.id) {
+      highlightLinks.add(l);
+      const other = src === node.id ? l.target : l.source;
+      if (typeof other === 'object') highlightNodes.add(other);
+      else {
+        const found = allNodes.find(n => n.id === other);
+        if (found) highlightNodes.add(found);
+      }
+    }
+  });
+  graphInstance.nodeColor(graphInstance.nodeColor());
+  graphInstance.linkColor(graphInstance.linkColor());
+
+  // Show side panel
+  showSidePanel(node);
+}
+
+function showSidePanel(node) {
+  const panel = document.getElementById('sidePanel');
+  const content = document.getElementById('panelContent');
+  
+  const ext = node.extension || '';
+  const color = node.color || '#808098';
+  
+  let html = `<h2>File Details</h2>`;
+  html += `<h3>${node.name}</h3>`;
+  html += `<div style="margin:8px 0">
+    <span class="tag" style="background:${color}22;color:${color};border:1px solid ${color}44">${ext || node.type}</span>
+    ${node.is_entry_point ? '<span class="tag" style="background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44">⚡ Entry Point</span>' : ''}
+  </div>`;
+  
+  html += `<div class="detail-row"><span class="label">Path</span><span class="value" style="font-size:11px;word-break:break-all">${node.id}</span></div>`;
+  if (node.size) html += `<div class="detail-row"><span class="label">Size</span><span class="value">${(node.size/1024).toFixed(1)} KB</span></div>`;
+  if (node.lines) html += `<div class="detail-row"><span class="label">Lines</span><span class="value">${node.lines.toLocaleString()}</span></div>`;
+
+  // Definitions
+  if (node.definitions && node.definitions.length) {
+    html += `<h2 style="margin-top:20px">Definitions (${node.definitions.length})</h2>`;
+    html += `<ul class="def-list">`;
+    node.definitions.forEach(d => {
+      const icon = d.type === 'class' ? '🏷️' : d.type === 'struct' ? '📦' : '⚡';
+      html += `<li>${icon} <strong>${d.name}</strong> <span style="color:#6366f1;font-size:11px">${d.type}</span></li>`;
+    });
+    html += `</ul>`;
+  }
+
+  // Imports
+  if (node.imports && node.imports.length) {
+    html += `<h2 style="margin-top:20px">Imports (${node.imports.length})</h2>`;
+    html += `<ul class="def-list">`;
+    node.imports.forEach(i => { html += `<li>${i}</li>`; });
+    html += `</ul>`;
+  }
+
+  // Connected files
+  const incoming = [];
+  const outgoing = [];
+  allLinks.forEach(l => {
+    const src = typeof l.source === 'object' ? l.source.id : l.source;
+    const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+    if (l.type !== 'imports') return;
+    if (src === node.id) outgoing.push(tgt);
+    if (tgt === node.id) incoming.push(src);
+  });
+
+  if (outgoing.length) {
+    html += `<h2 style="margin-top:20px">Depends On (${outgoing.length})</h2>`;
+    html += `<ul class="def-list">${outgoing.map(f => `<li>${f}</li>`).join('')}</ul>`;
+  }
+  if (incoming.length) {
+    html += `<h2 style="margin-top:20px">Used By (${incoming.length})</h2>`;
+    html += `<ul class="def-list">${incoming.map(f => `<li>${f}</li>`).join('')}</ul>`;
+  }
+
+  content.innerHTML = html;
+  panel.classList.add('open');
+}
+
+function closeSidePanel() {
+  document.getElementById('sidePanel').classList.remove('open');
+  highlightNodes.clear();
+  highlightLinks.clear();
+  if (graphInstance) {
+    graphInstance.nodeColor(graphInstance.nodeColor());
+    graphInstance.linkColor(graphInstance.linkColor());
+  }
+}
+
+// ── Legend ──
+function buildLegend() {
+  const usedExts = new Set();
+  allNodes.forEach(n => { if (n.extension) usedExts.add(n.extension); });
+  let html = '';
+  [...usedExts].sort().forEach(ext => {
+    const color = EXT_COLORS[ext] || EXT_COLORS['default'];
+    html += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${ext}</div>`;
+  });
+  if (allNodes.some(n => n.is_entry_point)) {
+    html += `<div class="legend-item"><div class="legend-dot" style="background:${ENTRY_COLOR}"></div>Entry Point</div>`;
+  }
+  html += `<div class="legend-item"><div class="legend-dot" style="background:${DIR_COLOR}"></div>Directory</div>`;
+  document.getElementById('legend').innerHTML = html;
+}
+
+// ── File loading ──
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) loadFile(file);
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.nodes && data.edges) {
+        initGraph(data);
+        hideDropOverlay();
+      } else {
+        alert('Invalid graph JSON — expected {nodes, edges}');
+      }
+    } catch (err) {
+      alert('Failed to parse JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ── Drag & drop ──
+document.body.addEventListener('dragover', (e) => { e.preventDefault(); showDropOverlay(); });
+document.body.addEventListener('dragleave', (e) => {
+  if (e.relatedTarget === null) hideDropOverlay();
+});
+document.body.addEventListener('drop', (e) => {
+  e.preventDefault();
+  hideDropOverlay();
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+
+function showDropOverlay() { document.getElementById('dropOverlay').classList.add('show'); }
+function hideDropOverlay() { document.getElementById('dropOverlay').classList.remove('show'); }
+
+// ── Auto-load: try to load from URL param ──
+const urlParams = new URLSearchParams(window.location.search);
+const graphUrl = urlParams.get('url');
+if (graphUrl) {
+  fetch(graphUrl).then(r => r.json()).then(initGraph).catch(e => console.error('Failed to load:', e));
+}
+
+// ── Show drop overlay on start if no graph loaded ──
+setTimeout(() => { if (!graphData) showDropOverlay(); }, 500);
+</script>
+</body>
+</html>
