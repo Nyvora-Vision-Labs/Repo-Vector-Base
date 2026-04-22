@@ -115,7 +115,7 @@ def fetch_all_parallel(session, owner, repo):
         futures.append(pool.submit(fetch_simple, "topics", f"{base}/topics",
                                    lambda d: d.get("names", [])))
         futures.append(pool.submit(fetch_simple, "tree",
-                                   f"{base}/git/trees/{default_branch}",
+                                   f"{base}/git/trees/{default_branch}?recursive=1",
                                    lambda d: d.get("tree", [])))
 
         # New: commit activity + code frequency (Features 3 & 4)

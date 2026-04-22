@@ -273,64 +273,101 @@ def resolve_import(importing_file, raw_import, import_type, all_paths):
 
 
 def build_graph(file_contents, tree):
-    """Build the full knowledge graph from parsed files."""
+    """Build the full knowledge graph from parsed files.
+    
+    Ensures every node is connected via directory hierarchy and import edges.
+    Creates synthetic parent directories and a virtual root so the graph
+    is fully connected for 3D visualization.
+    """
     all_paths = {item["path"] for item in tree if item.get("type") == "blob"}
-    dir_paths = {item["path"] for item in tree if item.get("type") == "tree"}
 
     nodes = {}  # path -> node data
     edges = []  # list of {from, to, type}
+    seen_edges = set()  # deduplicate edges
 
-    # Build nodes from ALL tree items
+    def add_edge(src, dst, edge_type, raw=None):
+        key = (src, dst, edge_type)
+        if key not in seen_edges:
+            seen_edges.add(key)
+            edge = {"from": src, "to": dst, "type": edge_type}
+            if raw:
+                edge["raw"] = raw
+            edges.append(edge)
+
+    # ── 1. Create file nodes ──
     for item in tree:
         path = item.get("path", "")
         if item.get("type") == "tree":
-            nodes[path] = {
-                "id": path,
-                "type": "directory",
-                "name": path.split("/")[-1],
-            }
-        else:
-            ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
-            node = {
-                "id": path,
-                "type": "file",
-                "name": path.split("/")[-1],
-                "extension": ext,
-                "size": item.get("size", 0),
-            }
-            if path in file_contents:
-                content = file_contents[path]
-                node["definitions"] = parse_definitions(path, content)
-                node["imports_raw"] = parse_imports(path, content)
-                node["lines"] = content.count("\n") + 1
-            nodes[path] = node
+            continue  # we'll build dirs ourselves
+        ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
+        node = {
+            "id": path,
+            "type": "file",
+            "name": path.split("/")[-1],
+            "extension": ext,
+            "size": item.get("size", 0),
+        }
+        if path in file_contents:
+            content = file_contents[path]
+            node["definitions"] = parse_definitions(path, content)
+            node["imports_raw"] = parse_imports(path, content)
+            node["lines"] = content.count("\n") + 1
+        nodes[path] = node
 
-    # Build directory containment edges
+    # ── 2. Synthesize directory hierarchy ──
+    # Walk every file path and create all parent directories
+    all_dirs = set()
     for path in all_paths:
         parts = path.split("/")
-        if len(parts) > 1:
-            parent_dir = "/".join(parts[:-1])
-            if parent_dir in dir_paths:
-                edges.append({
-                    "from": parent_dir,
-                    "to": path,
-                    "type": "contains",
-                })
+        for depth in range(1, len(parts)):
+            dir_path = "/".join(parts[:depth])
+            all_dirs.add(dir_path)
 
-    # Build import/dependency edges
+    for dir_path in all_dirs:
+        if dir_path not in nodes:
+            nodes[dir_path] = {
+                "id": dir_path,
+                "type": "directory",
+                "name": dir_path.split("/")[-1],
+            }
+
+    # ── 3. Virtual root node ──
+    # Connects all top-level files and dirs so the graph is one component
+    root_id = "."
+    nodes[root_id] = {
+        "id": root_id,
+        "type": "directory",
+        "name": "(root)",
+    }
+
+    # ── 4. Build containment edges (dir → child) ──
+    for path in list(all_paths) + list(all_dirs):
+        parts = path.split("/")
+        if len(parts) == 1:
+            # Top-level → connect to root
+            add_edge(root_id, path, "contains")
+        else:
+            parent_dir = "/".join(parts[:-1])
+            add_edge(parent_dir, path, "contains")
+
+    # Also connect dirs to their parent dirs
+    for dir_path in all_dirs:
+        parts = dir_path.split("/")
+        if len(parts) == 1:
+            add_edge(root_id, dir_path, "contains")
+        else:
+            parent = "/".join(parts[:-1])
+            add_edge(parent, dir_path, "contains")
+
+    # ── 5. Build import/dependency edges (deduplicated) ──
     for path, content in file_contents.items():
         imports = parse_imports(path, content)
         for imp in imports:
             resolved = resolve_import(path, imp["raw"], imp["type"], all_paths)
             if resolved and resolved != path:
-                edges.append({
-                    "from": path,
-                    "to": resolved,
-                    "type": "imports",
-                    "raw": imp["raw"],
-                })
+                add_edge(path, resolved, "imports", raw=imp["raw"])
 
-    # Detect entry points
+    # ── 6. Detect entry points ──
     entry_indicators = [
         "main.py", "app.py", "__main__.py", "index.js", "index.ts",
         "main.go", "main.rs", "Main.java", "server.py", "server.js",

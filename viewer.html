@@ -126,37 +126,35 @@ function initGraph(data) {
   allNodes = [];
   allLinks = [];
 
-  // Only include file nodes and dirs that contain files
-  const importEdges = data.edges.filter(e => e.type === 'imports');
-  const importNodes = new Set();
-  importEdges.forEach(e => { importNodes.add(e.from); importNodes.add(e.to); });
+  // Count connections per node for sizing
+  const connectionCount = {};
+  data.edges.forEach(e => {
+    connectionCount[e.from] = (connectionCount[e.from] || 0) + 1;
+    connectionCount[e.to] = (connectionCount[e.to] || 0) + 1;
+  });
 
-  // If few import edges, show all files
-  const showAll = importEdges.length < 5;
-
+  // Include ALL nodes: root, directories, files
   data.nodes.forEach(n => {
+    let color, val;
     if (n.type === 'directory') {
-      if (showAll) {
-        const node = { ...n, color: DIR_COLOR, val: 2 };
-        allNodes.push(node);
-        nodeMap[n.id] = node;
-      }
-      return;
+      color = n.id === '.' ? '#a855f7' : DIR_COLOR;
+      val = n.id === '.' ? 8 : Math.max(3, (connectionCount[n.id] || 1) * 0.8);
+    } else {
+      const ext = n.extension || '';
+      color = n.is_entry_point ? ENTRY_COLOR : (EXT_COLORS[ext] || EXT_COLORS['default']);
+      val = n.is_entry_point ? 5 : Math.max(1.5, (connectionCount[n.id] || 0) * 0.7);
     }
-    // File node
-    const ext = n.extension || '';
-    const color = n.is_entry_point ? ENTRY_COLOR : (EXT_COLORS[ext] || EXT_COLORS['default']);
-    const val = n.is_entry_point ? 5 : (importNodes.has(n.id) ? 3 : 1.5);
     const node = { ...n, color, val };
     allNodes.push(node);
     nodeMap[n.id] = node;
   });
 
+  // Include ALL edges — both imports and contains
   data.edges.forEach(e => {
     if (nodeMap[e.from] && nodeMap[e.to]) {
       allLinks.push({
         source: e.from, target: e.to, type: e.type,
-        color: e.type === 'imports' ? IMPORT_EDGE_COLOR : CONTAINS_EDGE_COLOR,
+        color: e.type === 'imports' ? IMPORT_EDGE_COLOR : 'rgba(99,102,241,0.12)',
       });
     }
   });
@@ -167,7 +165,7 @@ function initGraph(data) {
     .nodeId('id')
     .nodeLabel(n => '')
     .nodeColor(n => {
-      if (highlightNodes.size && !highlightNodes.has(n)) return 'rgba(60,60,80,0.3)';
+      if (highlightNodes.size && !highlightNodes.has(n)) return 'rgba(60,60,80,0.2)';
       return n.color;
     })
     .nodeVal(n => n.val)
@@ -175,11 +173,12 @@ function initGraph(data) {
     .nodeResolution(16)
     .linkColor(l => {
       if (highlightLinks.size && !highlightLinks.has(l)) return 'rgba(255,255,255,0.01)';
-      return l.type === 'imports' ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.04)';
+      if (l.type === 'imports') return 'rgba(139,92,246,0.6)';
+      return 'rgba(99,102,241,0.15)';
     })
-    .linkWidth(l => l.type === 'imports' ? 1.2 : 0.3)
-    .linkOpacity(0.6)
-    .linkDirectionalArrowLength(l => l.type === 'imports' ? 4 : 0)
+    .linkWidth(l => l.type === 'imports' ? 1.8 : 0.5)
+    .linkOpacity(0.7)
+    .linkDirectionalArrowLength(l => l.type === 'imports' ? 5 : 0)
     .linkDirectionalArrowRelPos(1)
     .linkDirectionalParticles(l => l.type === 'imports' ? 2 : 0)
     .linkDirectionalParticleWidth(1.5)
@@ -188,15 +187,17 @@ function initGraph(data) {
     .backgroundColor('#0a0a1a')
     .onNodeClick(handleNodeClick)
     .onNodeHover(handleNodeHover)
-    .d3Force('charge').strength(-120);
+    .d3Force('charge').strength(n => n.type === 'directory' ? -200 : -80);
 
-  graphInstance.d3Force('link').distance(l => l.type === 'imports' ? 80 : 40);
+  graphInstance.d3Force('link').distance(l => l.type === 'imports' ? 100 : 30);
 
   // Update stats
   const fileCount = allNodes.filter(n => n.type === 'file').length;
-  const edgeCount = allLinks.filter(l => l.type === 'imports').length;
+  const dirCount = allNodes.filter(n => n.type === 'directory').length;
+  const importCount = allLinks.filter(l => l.type === 'imports').length;
+  const containsCount = allLinks.filter(l => l.type === 'contains').length;
   document.getElementById('statsText').textContent = 
-    `${data.repository || 'Repo'} — ${fileCount} files, ${edgeCount} dependencies`;
+    `${data.repository || 'Repo'} — ${fileCount} files, ${dirCount} dirs, ${importCount} imports, ${containsCount} structure edges`;
 
   // Build filters
   buildFilters();
