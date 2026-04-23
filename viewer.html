@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Repo-Vector-Base — Architecture Graph Viewer</title>
+  <title>GitSphere — Architecture Graph Viewer</title>
   <script src="https://unpkg.com/3d-force-graph@1"></script>
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.160.0/examples/js/renderers/CSS2DRenderer.js"></script>
@@ -1606,6 +1606,32 @@
     }
 
     /* ═══════════════════════════════════════════════════
+       LABEL VISIBILITY — only show labels for important nodes
+       Rules (applied in order, first match wins):
+         • module nodes  → always show
+         • entry points  → always show
+         • directories   → show only when few dirs visible (≤ 30)
+         • regular files → show only when total visible nodes ≤ 40
+                          AND node has high importance (is_entry_point /
+                          role !== "source" / importance_score ≥ 4)
+    ════════════════════════════════════════════════════ */
+    function shouldShowLabel(node) {
+      if (node.type === "module") return true;
+      if (node.is_entry_point) return true;
+      const total = visibleNodes.length || currentNodes.length;
+      if (node.type === "directory") return total <= 30;
+      // Regular file nodes — only label when graph is small OR node is prominent
+      if (total <= 40) return true;
+      if (total <= 80) {
+        return node.is_entry_point ||
+          (node.role && node.role !== "source") ||
+          importanceForNode(node) >= 4;
+      }
+      // Large graphs: only entry points (already caught above) and very high importance
+      return importanceForNode(node) >= 8;
+    }
+
+    /* ═══════════════════════════════════════════════════
        VIEW BUILDERS
     ════════════════════════════════════════════════════ */
     function ensureOverviewView() {
@@ -1741,10 +1767,12 @@
       const geo = new THREE.SphereGeometry(radius, 40, 40);
       const mat = new THREE.MeshPhongMaterial({ color: parseColor(baseColor), specular: new THREE.Color(0x888888), shininess: 65, emissive: parseColor(baseColor), emissiveIntensity: .12 });
       const sphere = new THREE.Mesh(geo, mat); group.add(sphere);
-      // Label
-      const label = createLabel(name, baseColor);
-      label.position.set(0, -radius - 10, 0);
-      group.add(label);
+      // Label — only for important/prominent nodes to avoid clutter on large repos
+      if (shouldShowLabel(node)) {
+        const label = createLabel(name, baseColor);
+        label.position.set(0, -radius - 10, 0);
+        group.add(label);
+      }
       return group;
     }
 
@@ -1948,10 +1976,32 @@
     ════════════════════════════════════════════════════ */
     function updateViewButtons() { document.querySelectorAll(".view-btn").forEach(b => b.classList.toggle("active", b.dataset.view === currentView)) }
 
+    function normalizeExt(raw) {
+      // Extract just the final extension from whatever is stored in node.extension.
+      // Handles cases like ".devcontainer/Dockerfile" → ".Dockerfile",
+      // plain ".rs" → ".rs", "Dockerfile" (no dot) → "Dockerfile"
+      if (!raw) return null;
+      const str = String(raw).trim();
+      // If it contains a slash, take only the last path segment
+      const base = str.includes("/") ? str.split("/").pop() : str;
+      if (!base) return null;
+      // Must look like a real extension: starts with dot + at least one non-dot char,
+      // OR is a known extensionless name (Dockerfile, Makefile, etc.)
+      // Reject things that are clearly paths or empty
+      if (base.length < 2) return null;
+      return base;
+    }
+
     function buildFilters() {
       filterWrap.innerHTML = ""; activeFilters = new Set();
       if (currentView === "overview") { filterWrap.classList.add("hidden"); return }
-      const exts = [...new Set(currentNodes.filter(n => n.type === "file" && n.extension).map(n => n.extension))].sort();
+      // Collect normalized extensions, skip nulls and duplicates
+      const extSet = new Map(); // normalized → original (first seen)
+      currentNodes.filter(n => n.type === "file" && n.extension).forEach(n => {
+        const norm = normalizeExt(n.extension);
+        if (norm && !extSet.has(norm)) extSet.set(norm, n.extension);
+      });
+      const exts = [...extSet.keys()].sort();
       if (!exts.length) { filterWrap.classList.add("hidden"); return }
       filterWrap.classList.remove("hidden");
       exts.forEach(ext => {
@@ -2008,7 +2058,7 @@
 
     function applyFilters() {
       if (!graphInstance) return;
-      visibleNodes = currentView === "overview" || activeFilters.size === 0 ? [...currentNodes] : currentNodes.filter(n => n.type !== "file" || activeFilters.has(n.extension));
+      visibleNodes = currentView === "overview" || activeFilters.size === 0 ? [...currentNodes] : currentNodes.filter(n => n.type !== "file" || activeFilters.has(normalizeExt(n.extension)));
       const vids = new Set(visibleNodes.map(n => n.id));
       visibleLinks = currentLinks.filter(l => vids.has(nodeIdOf(l.source)) && vids.has(nodeIdOf(l.target)));
       graphInstance.graphData({ nodes: visibleNodes, links: visibleLinks });
