@@ -4,7 +4,18 @@
 
 By combining parallelized GitHub API fetching, regex-driven structural parsing, and **DeepSeek AI**, GitSphere goes beyond surface-level mapping. It doesn’t just show connections—it explains *why they exist*, turning dense repositories into clear, navigable systems.
 
-![GitSphere Sample Graph Overview](sample_graph.png)
+<table align="center">
+  <tr>
+    <td><img src="images_sample/sample_graph.png" width="300" alt="Graph 1"></td>
+    <td><img src="images_sample/sample_graph2.png" width="300" alt="Graph 2"></td>
+    <td><img src="images_sample/sample_graph3.png" width="300" alt="Graph 3"></td>
+  </tr>
+  <tr>
+    <td><img src="images_sample/sample_graph4.png" width="300" alt="Graph 4"></td>
+    <td><img src="images_sample/sample_graph5.png" width="300" alt="Graph 5"></td>
+    <td><img src="images_sample/sample_graph6.png" width="300" alt="Graph 6"></td>
+  </tr>
+</table>
 
 ---
 
